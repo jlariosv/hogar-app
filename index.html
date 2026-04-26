@@ -260,6 +260,41 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
   font-size: 13px; z-index: 500; opacity: 0; transition: all .25s; pointer-events: none; white-space: nowrap;
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* DASHBOARD */
+.dash-hero {
+  background: linear-gradient(135deg,#1a1a1a 0%,#2d3436 100%);
+  border-radius: var(--radius); padding: 20px; margin-bottom: 14px; color: white;
+}
+.dash-hero-title { font-family:'DM Serif Display',serif; font-size:22px; margin-bottom:2px; }
+.dash-hero-sub { font-size:12px; opacity:.6; margin-bottom:16px; }
+.dash-hero-row { display:flex; gap:16px; }
+.dash-hero-stat { flex:1; }
+.dash-hero-val { font-size:20px; font-weight:600; }
+.dash-hero-lbl { font-size:11px; opacity:.6; margin-top:1px; }
+.dash-section-title { font-size:13px; font-weight:600; color:var(--text2); margin:16px 0 8px; display:flex; align-items:center; gap:6px; }
+.dash-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:4px; }
+.dash-card {
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  padding:14px; cursor:pointer; transition:background .1s;
+}
+.dash-card:hover { background:var(--bg); }
+.dash-card-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.dash-card-icon { font-size:24px; }
+.dash-card-name { font-size:12px; font-weight:500; color:var(--text2); margin-bottom:6px; }
+.dash-progress { height:4px; background:var(--border); border-radius:2px; overflow:hidden; }
+.dash-progress-fill { height:100%; border-radius:2px; transition:width .3s; }
+.dash-nums { display:flex; justify-content:space-between; margin-top:5px; font-size:11px; color:var(--text3); }
+.dash-gastos-card {
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; margin-bottom:8px;
+}
+.dash-gasto-row { display:flex; align-items:center; padding:11px 14px; border-bottom:1px solid var(--border); gap:10px; }
+.dash-gasto-row:last-child { border-bottom:none; }
+.dash-gasto-icon { font-size:20px; width:32px; text-align:center; }
+.dash-gasto-name { flex:1; font-size:13px; font-weight:500; }
+.dash-gasto-val { font-size:13px; font-weight:600; }
+.dash-alert { background:var(--amber-bg); border:1px solid #f0c060; border-radius:var(--radius-sm); padding:10px 14px; font-size:12px; color:var(--amber); margin-bottom:8px; display:flex; align-items:center; gap:8px; }
+
 </style>
 </head>
 <body>
@@ -305,7 +340,8 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
   </div>
 
   <nav class="nav">
-    <button class="nav-item active" onclick="setTab('despensa',this)"><span class="nav-icon">🥦</span><span class="nav-label">Despensa</span></button>
+    <button class="nav-item active" onclick="setTab('dashboard',this)"><span class="nav-icon">🏠</span><span class="nav-label">Inicio</span></button>
+    <button class="nav-item" onclick="setTab('despensa',this)"><span class="nav-icon">🛒</span><span class="nav-label">Despensa</span></button>
     <button class="nav-item" onclick="setTab('aseo_hogar',this)"><span class="nav-icon">🧹</span><span class="nav-label">Aseo</span></button>
     <button class="nav-item" onclick="setTab('aseo_personal',this)"><span class="nav-icon">🚿</span><span class="nav-label">Personal</span></button>
     <button class="nav-item" onclick="setTab('servicios',this)"><span class="nav-icon">💡</span><span class="nav-label">Servicios</span></button>
@@ -318,7 +354,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
   </div>
 </div>
 
-<button class="fab" id="fab" onclick="openAdd()">+</button>
+<button class="fab" id="fab" onclick="openAdd()" style="display:none">+</button>
 <div class="toast" id="toast"></div>
 
 <!-- MODAL -->
@@ -337,8 +373,25 @@ const SHEET_ID  = '1XI6pIg1VhUhYUfIKS45o1uNYfe25ntapU2ilE_VN7Rc';
 const SCOPES    = 'https://www.googleapis.com/auth/spreadsheets';
 
 // ─── TAB META ─────────────────────────────────────────────────────────────────
+const CAT_ICONS = {
+  // Despensa
+  'Lácteos':'🥛','Verduras':'🥦','Frutas':'🍎','Carnes':'🥩','Granos':'🌾',
+  'Bebidas':'🧃','Enlatados':'🥫','Panadería':'🍞','Condimentos':'🧂','Otros':'📦',
+  // Aseo hogar
+  'Limpieza':'🧴','Desinfección':'🦠','Lavandería':'👕','Cocina':'🍳','Baño':'🚽',
+  // Aseo personal
+  'Cabello':'💆','Piel':'🧴','Dental':'🦷','Cuerpo':'🧼',
+  // Servicios
+  'Energía':'⚡','Agua':'💧','Gas':'🔥','Internet':'📶','TV':'📺','Teléfono':'☎️',
+  // Admin
+  'Cuota ordinaria':'🏠','Cuota extraordinaria':'💰','Multa':'⚠️','Seguro':'🛡️',
+  // Celular
+  'Prepago':'📲','Postpago':'📱','Datos':'📡','Mixto':'🔀'
+};
+
 const TAB_META = {
-  despensa:     { label:'Despensa',     icon:'🥦', sheet:'Despensa',    type:'inventory', cats:['Lácteos','Verduras','Frutas','Carnes','Granos','Bebidas','Enlatados','Panadería','Condimentos','Otros'], locs:['Nevera','Despensa','Congelador'], units:['kg','g','L','ml','unidades','paquetes','cajas','bolsas'] },
+  dashboard:    { label:'Inicio',       icon:'🏠', type:'dashboard' },
+  despensa:     { label:'Despensa',     icon:'🛒', sheet:'Despensa',    type:'inventory', cats:['Lácteos','Verduras','Frutas','Carnes','Granos','Bebidas','Enlatados','Panadería','Condimentos','Otros'], locs:['Nevera','Despensa','Congelador'], units:['kg','g','L','ml','unidades','paquetes','cajas','bolsas'] },
   aseo_hogar:   { label:'Aseo Hogar',   icon:'🧹', sheet:'AseoHogar',   type:'inventory', cats:['Limpieza','Desinfección','Lavandería','Cocina','Baño','Otros'], locs:['Bajo mesón','Lavadero','Cuarto servicios'], units:['unidades','litros','frascos','bolsas','rollos'] },
   aseo_personal:{ label:'Aseo Personal',icon:'🚿', sheet:'AseoPersonal',type:'inventory', cats:['Cabello','Piel','Dental','Cuerpo','Otros'], locs:['Baño principal','Baño secundario','Dormitorio'], units:['unidades','ml','g','tubos'] },
   servicios:    { label:'Servicios',    icon:'💡', sheet:'Servicios',   type:'servicios', cats:['Energía','Agua','Gas','Internet','TV','Teléfono'] },
@@ -348,7 +401,7 @@ const TAB_META = {
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
 let tokenClient, accessToken = null;
-let currentTab = 'despensa';
+let currentTab = 'dashboard';
 let currentFilter = 'all';
 let searchQ = '';
 let modalMode = null, editRow = null;
@@ -464,6 +517,7 @@ async function syncAll() {
   showSyncInd('Sincronizando...');
   try {
     for (const [tab, meta] of Object.entries(TAB_META)) {
+      if (meta.type === 'dashboard') continue;
       await ensureSheet(meta.sheet, HEADERS[meta.type] || HEADERS.inventory);
       const rows = await sheetsGet(`${meta.sheet}!A2:Z`);
       if (meta.type === 'inventory') {
@@ -597,16 +651,110 @@ function setTab(tab, btn) {
   currentTab = tab; currentFilter = 'all'; searchQ = '';
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+  // Ocultar FAB en dashboard
+  document.getElementById('fab').style.display = tab === 'dashboard' ? 'none' : 'flex';
   render();
 }
 
 function render() {
-  const tab = currentTab, meta = TAB_META[tab], items = data[tab];
+  const tab = currentTab, meta = TAB_META[tab];
   const c = document.getElementById('content');
-  if (meta.type === 'servicios') { renderServicios(c, items); return; }
-  if (meta.type === 'admin')     { renderAdmin(c, items); return; }
-  if (meta.type === 'celular')   { renderCelular(c, items); return; }
-  renderInventory(c, tab, meta, items);
+  if (tab === 'dashboard')       { renderDashboard(c); return; }
+  if (meta.type === 'servicios') { renderServicios(c, data[tab]); return; }
+  if (meta.type === 'admin')     { renderAdmin(c, data[tab]); return; }
+  if (meta.type === 'celular')   { renderCelular(c, data[tab]); return; }
+  renderInventory(c, tab, meta, data[tab]);
+}
+
+function renderDashboard(c) {
+  const now = new Date();
+  const mesActual = now.toLocaleString('es-CO',{month:'long',year:'numeric'});
+
+  // Inventario stats
+  const invTabs = ['despensa','aseo_hogar','aseo_personal'];
+  const invCards = invTabs.map(tab => {
+    const items = data[tab];
+    const total = items.length;
+    const avail = items.filter(i=>i.available).length;
+    const buy = total - avail;
+    const pct = total ? Math.round((avail/total)*100) : 100;
+    const meta = TAB_META[tab];
+    const color = buy > 0 ? '#e74c3c' : '#2d6a4f';
+    return `<div class="dash-card" onclick="navToTab('${tab}')">
+      <div class="dash-card-top">
+        <span class="dash-card-icon">${meta.icon}</span>
+        <span class="badge ${buy>0?'badge-red':'badge-green'}">${buy>0?buy+' falta':'✓ Todo'}</span>
+      </div>
+      <div class="dash-card-name">${meta.label}</div>
+      <div class="dash-progress"><div class="dash-progress-fill" style="width:${pct}%;background:${color}"></div></div>
+      <div class="dash-nums"><span>${avail} disponibles</span><span>${pct}%</span></div>
+    </div>`;
+  }).join('');
+
+  // Gastos mes actual
+  const mesKey = now.toISOString().slice(0,7); // YYYY-MM
+  const gastosServicios = data.servicios.map(sv => {
+    const rec = (sv.records||[]).find(r=>r.month===mesKey) || (sv.records||[]).slice(-1)[0];
+    return rec ? { name: sv.name, cat: sv.category, cost: parseFloat(rec.cost)||0 } : null;
+  }).filter(Boolean);
+
+  const gastosAdmin = data.admin.filter(i=>i.date?.slice(0,7)===mesKey || i.status==='pending')
+    .map(i=>({ name:i.name, cat:i.category, cost:parseFloat(i.amount)||0, pending:i.status==='pending' }));
+
+  const gastosCelular = data.celular.filter(i=>i.status==='active')
+    .map(i=>({ name:i.name, cat:i.category, cost:parseFloat(i.amount)||0 }));
+
+  const totalGastos = [...gastosServicios,...gastosAdmin,...gastosCelular].reduce((s,g)=>s+g.cost,0);
+  const totalComprar = invTabs.reduce((s,t)=>s+data[t].filter(i=>!i.available).length,0);
+  const pendAdmin = data.admin.filter(i=>i.status==='pending').length;
+
+  // Alertas
+  let alertas = '';
+  if (totalComprar > 0) alertas += `<div class="dash-alert">🛒 Tienes <strong>${totalComprar} producto${totalComprar>1?'s':''}</strong> por comprar</div>`;
+  if (pendAdmin > 0) alertas += `<div class="dash-alert">⚠️ Hay <strong>${pendAdmin} pago${pendAdmin>1?'s':''}</strong> pendiente${pendAdmin>1?'s':''} de administración</div>`;
+
+  const buildGastoRows = (arr, icon) => arr.map(g=>`
+    <div class="dash-gasto-row">
+      <span class="dash-gasto-icon">${CAT_ICONS[g.cat]||icon}</span>
+      <span class="dash-gasto-name">${g.name}${g.pending?' <span class="badge badge-amber" style="font-size:10px">Pendiente</span>':''}</span>
+      <span class="dash-gasto-val">${fmt(g.cost)}</span>
+    </div>`).join('');
+
+  c.innerHTML = `
+  <div class="dash-hero">
+    <div class="dash-hero-title">Nuestro Hogar 🏠</div>
+    <div class="dash-hero-sub">${mesActual.charAt(0).toUpperCase()+mesActual.slice(1)}</div>
+    <div class="dash-hero-row">
+      <div class="dash-hero-stat"><div class="dash-hero-val">${fmt(totalGastos)}</div><div class="dash-hero-lbl">Gastos del mes</div></div>
+      <div class="dash-hero-stat"><div class="dash-hero-val">${totalComprar}</div><div class="dash-hero-lbl">Por comprar</div></div>
+    </div>
+  </div>
+
+  ${alertas}
+
+  <div class="dash-section-title">📦 Inventario del hogar</div>
+  <div class="dash-grid">${invCards}</div>
+
+  ${gastosServicios.length ? `
+  <div class="dash-section-title">💡 Servicios públicos</div>
+  <div class="dash-gastos-card">${buildGastoRows(gastosServicios,'💡')}</div>` : ''}
+
+  ${gastosAdmin.length ? `
+  <div class="dash-section-title">🏢 Administración</div>
+  <div class="dash-gastos-card">${buildGastoRows(gastosAdmin,'🏢')}</div>` : ''}
+
+  ${gastosCelular.length ? `
+  <div class="dash-section-title">📱 Planes de celular</div>
+  <div class="dash-gastos-card">${buildGastoRows(gastosCelular,'📱')}</div>` : ''}
+
+  ${!gastosServicios.length && !gastosAdmin.length && !gastosCelular.length ?
+    `<div class="empty" style="padding:24px"><div class="empty-icon">💰</div><div class="empty-text">Agrega servicios y pagos para ver el resumen</div></div>` : ''}
+  `;
+}
+
+function navToTab(tab) {
+  const btn = document.querySelector(`.nav-item[onclick*="'${tab}'"]`);
+  if (btn) setTab(tab, btn);
 }
 
 function renderInventory(c, tab, meta, items) {
@@ -641,9 +789,10 @@ function renderInventory(c, tab, meta, items) {
     for (const [cat, arr] of Object.entries(grouped)) {
       html += `<div class="section-label">${cat}</div><div class="items-card">`;
       arr.forEach(i => {
+        const icon = CAT_ICONS[i.category] || meta.icon;
         html += `<div class="item-row" onclick="openEdit('${i.id}')">
           <div class="item-check ${i.available?'checked':''}" onclick="event.stopPropagation();toggleAvail('${i.id}')"></div>
-          <div class="item-icon">${meta.icon}</div>
+          <div class="item-icon">${icon}</div>
           <div class="item-info">
             <div class="item-name">${i.name}</div>
             <div class="item-meta">${i.location||'—'} · ${i.quantity} ${i.unit}</div>
@@ -674,9 +823,10 @@ function renderServicios(c, items) {
       const lastR = recs[recs.length-1], prevR = recs[recs.length-2];
       const trend = lastR&&prevR ? (parseFloat(lastR.cost)>parseFloat(prevR.cost)?'↑':'↓') : '';
       const trendCls = trend==='↑'?'trend-up':'trend-down';
+      const icon = CAT_ICONS[sv.category] || '💡';
       html += `<div class="items-card" style="margin-bottom:10px">
         <div class="item-row" onclick="openServicioDetail('${sv.id}')">
-          <div class="item-icon">💡</div>
+          <div class="item-icon">${icon}</div>
           <div class="item-info">
             <div class="item-name">${sv.name}</div>
             <div class="item-meta">${sv.category} · ${recs.length} registros</div>
@@ -730,8 +880,9 @@ function renderAdmin(c, items) {
   else {
     html += `<div class="items-card">`;
     filtered.forEach(i => {
+      const icon = CAT_ICONS[i.category] || '🏢';
       html += `<div class="item-row" onclick="openEdit('${i.id}')">
-        <div class="item-icon">🏢</div>
+        <div class="item-icon">${icon}</div>
         <div class="item-info"><div class="item-name">${i.name}</div><div class="item-meta">${i.category} · ${i.date||'—'}</div></div>
         <div class="item-right">
           <div style="font-size:14px;font-weight:600">${fmt(i.amount)}</div>
@@ -756,8 +907,9 @@ function renderCelular(c, items) {
   else {
     html += `<div class="items-card">`;
     items.forEach(i => {
+      const icon = CAT_ICONS[i.category] || '📱';
       html += `<div class="item-row" onclick="openEdit('${i.id}')">
-        <div class="item-icon">📱</div>
+        <div class="item-icon">${icon}</div>
         <div class="item-info"><div class="item-name">${i.name}</div><div class="item-meta">${i.carrier||'—'} · ${i.dataplan||'—'} · Pago: ${i.dueDate||'—'}</div></div>
         <div class="item-right">
           <div style="font-size:14px;font-weight:600">${fmt(i.amount)}</div>
