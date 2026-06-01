@@ -26,20 +26,16 @@ class HogarApp {
     console.log('🏠 Iniciando Hogar App...');
     
     try {
-      // Initialize IndexedDB
       await db.init();
       console.log('✓ IndexedDB inicializado');
 
-      // Initialize Auth
       const authReady = await authManager.init();
       console.log('✓ Autenticación inicializada');
 
-      // Setup listeners
       this.setupAuthListener();
       this.setupConnectivityListener();
       this.setupStateListener();
 
-      // Check initial auth state
       if (authManager.isAuthenticated()) {
         this.showApp();
         await this.loadData();
@@ -47,6 +43,7 @@ class HogarApp {
         this.showAuthScreen();
       }
 
+      this.registerEventHandlers();
       return true;
     } catch (error) {
       console.error('Error initializing app:', error);
@@ -120,10 +117,10 @@ class HogarApp {
    */
   showApp() {
     const authScreen = document.getElementById('auth-screen');
-    const app = document.getElementById('app');
+    const appEl = document.getElementById('app');
     
     if (authScreen) authScreen.style.display = 'none';
-    if (app) app.classList.add('visible');
+    if (appEl) appEl.classList.add('visible');
   }
 
   /**
@@ -131,10 +128,10 @@ class HogarApp {
    */
   showAuthScreen() {
     const authScreen = document.getElementById('auth-screen');
-    const app = document.getElementById('app');
+    const appEl = document.getElementById('app');
     
     if (authScreen) authScreen.style.display = 'flex';
-    if (app) app.classList.remove('visible');
+    if (appEl) appEl.classList.remove('visible');
   }
 
   /**
@@ -151,7 +148,8 @@ class HogarApp {
       }
       
       console.log('✓ Datos cargados exitosamente');
-      showSuccess('Datos sincronizados');\n      appState.setState({ lastSync: getCurrentTimestamp() });
+      showSuccess('Datos sincronizados');
+      appState.setState({ lastSync: getCurrentTimestamp() });
     } catch (error) {
       console.error('Error loading data:', error);
       showError('Error al cargar datos: ' + error.message);
@@ -201,7 +199,8 @@ class HogarApp {
   /**
    * Handle search with debounce
    */
-  handleSearch(query) {\n    appState.setState({ searchQuery: query });
+  handleSearch(query) {
+    appState.setState({ searchQuery: query });
     this.renderCurrentTab();
   }
 
@@ -248,9 +247,432 @@ class HogarApp {
     body.innerHTML = this.renderModal(mode, tab, item);
     overlay.classList.add('open');
 
-    // Attach event listeners
     this.attachModalListeners(tab);
   }
 
   /**
-   * Close modal\n   */\n  closeModal() {\n    const overlay = document.getElementById('modal-overlay');\n    if (overlay) overlay.classList.remove('open');\n    this.currentEditingItem = null;\n  }\n\n  /**\n   * Render modal content\n   */\n  renderModal(mode, tab, item) {\n    const meta = CATEGORIES[tab];\n    if (!meta) return '';\n\n    const isEdit = mode === 'edit';\n    const title = isEdit ? 'Editar' : 'Agregar';\n\n    let html = `\n      <div class=\"modal-handle\"></div>\n      <div class=\"modal-header\">\n        <h2 class=\"modal-title\">${title} ${meta.label}</h2>\n      </div>\n      <div class=\"modal-body\">\n    `;\n\n    if (meta.type === 'inventory') {\n      html += this.renderInventoryForm(item, meta);\n    } else if (meta.type === 'admin') {\n      html += this.renderAdminForm(item, meta);\n    } else if (meta.type === 'celular') {\n      html += this.renderCelularForm(item, meta);\n    } else if (meta.type === 'servicios') {\n      html += this.renderServiceForm(item, meta);\n    }\n\n    html += `\n        <div class=\"modal-footer\">\n          <button class=\"btn btn-secondary modal-cancel\">Cancelar</button>\n          <button class=\"btn btn-primary modal-save\">Guardar</button>\n        </div>\n      </div>\n    `;\n\n    if (isEdit) {\n      html += `<button class=\"btn-delete\" data-id=\"${item.id}\">Eliminar</button>`;\n    }\n\n    return html;\n  }\n\n  /**\n   * Render inventory form\n   */\n  renderInventoryForm(item, meta) {\n    const name = item?.name || '';\n    const category = item?.category || '';\n    const location = item?.location || '';\n    const quantity = item?.quantity || '';\n    const unit = item?.unit || 'unidades';\n    const available = item?.available !== false;\n\n    return `\n      <div class=\"form-group\">\n        <label>Nombre *</label>\n        <input type=\"text\" class=\"form-input\" name=\"name\" value=\"${name}\" required>\n        <div class=\"form-error\" style=\"display:none;\"></div>\n      </div>\n      <div class=\"form-group\">\n        <label>Categoría *</label>\n        <select class=\"form-input\" name=\"category\" required>\n          <option value=\"\">Seleccionar...</option>\n          ${meta.cats.map(c => `<option value=\"${c}\" ${c === category ? 'selected' : ''}>${c}</option>`).join('')}\n        </select>\n      </div>\n      <div class=\"form-group\">\n        <label>Ubicación</label>\n        <select class=\"form-input\" name=\"location\">\n          <option value=\"\">Seleccionar...</option>\n          ${meta.locs.map(l => `<option value=\"${l}\" ${l === location ? 'selected' : ''}>${l}</option>`).join('')}\n        </select>\n      </div>\n      <div class=\"row2\">\n        <div class=\"form-group\">\n          <label>Cantidad *</label>\n          <input type=\"number\" class=\"form-input\" name=\"quantity\" value=\"${quantity}\" min=\"0\" required>\n        </div>\n        <div class=\"form-group\">\n          <label>Unidad *</label>\n          <select class=\"form-input\" name=\"unit\" required>\n            ${meta.units.map(u => `<option value=\"${u}\" ${u === unit ? 'selected' : ''}>${u}</option>`).join('')}\n          </select>\n        </div>\n      </div>\n      <div class=\"form-group\">\n        <label>\n          <input type=\"checkbox\" name=\"available\" ${available ? 'checked' : ''}>\n          Disponible\n        </label>\n      </div>\n    `;\n  }\n\n  /**\n   * Render admin form\n   */\n  renderAdminForm(item, meta) {\n    const name = item?.name || '';\n    const category = item?.category || '';\n    const amount = item?.amount || '';\n    const date = item?.date || '';\n    const status = item?.status || 'paid';\n\n    return `\n      <div class=\"form-group\">\n        <label>Concepto *</label>\n        <input type=\"text\" class=\"form-input\" name=\"name\" value=\"${name}\" required>\n      </div>\n      <div class=\"form-group\">\n        <label>Categoría *</label>\n        <select class=\"form-input\" name=\"category\" required>\n          <option value=\"\">Seleccionar...</option>\n          ${meta.cats.map(c => `<option value=\"${c}\" ${c === category ? 'selected' : ''}>${c}</option>`).join('')}\n        </select>\n      </div>\n      <div class=\"row2\">\n        <div class=\"form-group\">\n          <label>Valor *</label>\n          <input type=\"number\" class=\"form-input\" name=\"amount\" value=\"${amount}\" min=\"0\" required>\n        </div>\n        <div class=\"form-group\">\n          <label>Fecha</label>\n          <input type=\"date\" class=\"form-input\" name=\"date\" value=\"${date}\">\n        </div>\n      </div>\n      <div class=\"form-group\">\n        <label>Estado</label>\n        <select class=\"form-input\" name=\"status\">\n          <option value=\"paid\" ${status === 'paid' ? 'selected' : ''}>Pagado</option>\n          <option value=\"pending\" ${status === 'pending' ? 'selected' : ''}>Pendiente</option>\n        </select>\n      </div>\n    `;\n  }\n\n  /**\n   * Render celular form\n   */\n  renderCelularForm(item, meta) {\n    const name = item?.name || '';\n    const category = item?.category || '';\n    const carrier = item?.carrier || '';\n    const amount = item?.amount || '';\n    const dataplan = item?.dataplan || '';\n    const dueDate = item?.dueDate || '';\n    const status = item?.status || 'active';\n\n    return `\n      <div class=\"form-group\">\n        <label>Propietario *</label>\n        <input type=\"text\" class=\"form-input\" name=\"name\" value=\"${name}\" required>\n      </div>\n      <div class=\"form-group\">\n        <label>Tipo *</label>\n        <select class=\"form-input\" name=\"category\" required>\n          ${meta.cats.map(c => `<option value=\"${c}\" ${c === category ? 'selected' : ''}>${c}</option>`).join('')}\n        </select>\n      </div>\n      <div class=\"row2\">\n        <div class=\"form-group\">\n          <label>Valor</label>\n          <input type=\"number\" class=\"form-input\" name=\"amount\" value=\"${amount}\" min=\"0\">\n        </div>\n        <div class=\"form-group\">\n          <label>Plan de datos</label>\n          <input type=\"text\" class=\"form-input\" name=\"dataplan\" value=\"${dataplan}\" placeholder=\"ej: 10GB\">\n        </div>\n      </div>\n      <div class=\"row2\">\n        <div class=\"form-group\">\n          <label>Operador</label>\n          <input type=\"text\" class=\"form-input\" name=\"carrier\" value=\"${carrier}\">\n        </div>\n        <div class=\"form-group\">\n          <label>Fecha pago</label>\n          <input type=\"date\" class=\"form-input\" name=\"dueDate\" value=\"${dueDate}\">\n        </div>\n      </div>\n      <div class=\"form-group\">\n        <label>Estado</label>\n        <select class=\"form-input\" name=\"status\">\n          <option value=\"active\" ${status === 'active' ? 'selected' : ''}>Activo</option>\n          <option value=\"inactive\" ${status === 'inactive' ? 'selected' : ''}>Inactivo</option>\n        </select>\n      </div>\n    `;\n  }\n\n  /**\n   * Render service form\n   */\n  renderServiceForm(item, meta) {\n    const name = item?.name || '';\n    const category = item?.category || '';\n    const unit = item?.unit || '';\n\n    return `\n      <div class=\"form-group\">\n        <label>Servicio *</label>\n        <input type=\"text\" class=\"form-input\" name=\"name\" value=\"${name}\" required>\n      </div>\n      <div class=\"form-group\">\n        <label>Tipo *</label>\n        <select class=\"form-input\" name=\"category\" required>\n          ${meta.cats.map(c => `<option value=\"${c}\" ${c === category ? 'selected' : ''}>${c}</option>`).join('')}\n        </select>\n      </div>\n      <div class=\"form-group\">\n        <label>Unidad</label>\n        <input type=\"text\" class=\"form-input\" name=\"unit\" value=\"${unit}\" placeholder=\"ej: kWh, m3\">\n      </div>\n    `;\n  }\n\n  /**\n   * Attach modal event listeners\n   */\n  attachModalListeners(tab) {\n    const cancelBtn = document.querySelector('.modal-cancel');\n    const saveBtn = document.querySelector('.modal-save');\n    const deleteBtn = document.querySelector('.btn-delete');\n\n    if (cancelBtn) cancelBtn.addEventListener('click', () => this.closeModal());\n    if (saveBtn) saveBtn.addEventListener('click', () => this.handleSaveItem(tab));\n    if (deleteBtn) {\n      deleteBtn.addEventListener('click', () => this.handleDeleteItem(tab, deleteBtn.dataset.id));\n    }\n  }\n\n  /**\n   * Handle save item\n   */\n  async handleSaveItem(tab) {\n    const formInputs = document.querySelectorAll('.form-input');\n    const item = {};\n\n    formInputs.forEach(input => {\n      if (input.type === 'checkbox') {\n        item[input.name] = input.checked;\n      } else {\n        item[input.name] = input.value;\n      }\n    });\n\n    if (this.currentEditingItem?.id) {\n      item.id = this.currentEditingItem.id;\n    }\n\n    try {\n      // Validate before saving\n      const saveBtn = document.querySelector('.modal-save');\n      saveBtn.disabled = true;\n      saveBtn.innerHTML = '<span class=\"spinner\"></span>';\n\n      const saved = await dataRepository.saveInventoryItem(tab, item);\n      \n      if (this.currentEditingItem?.id) {\n        appState.updateItem(tab, saved.id, saved);\n        showSuccess('Item actualizado');\n      } else {\n        appState.addItem(tab, saved);\n        showSuccess('Item agregado');\n      }\n\n      this.closeModal();\n    } catch (error) {\n      showError(error.message);\n    } finally {\n      const saveBtn = document.querySelector('.modal-save');\n      if (saveBtn) {\n        saveBtn.disabled = false;\n        saveBtn.innerHTML = 'Guardar';\n      }\n    }\n  }\n\n  /**\n   * Handle delete item with confirmation\n   */\n  handleDeleteItem(tab, itemId) {\n    const item = appState.getTabData(tab).find(i => i.id === itemId);\n    if (!item) return;\n\n    const confirmed = confirm(`¿Eliminar \"${item.name}\"? Esta acción no se puede deshacer.`);\n    \n    if (confirmed) {\n      this.deleteItem(tab, itemId);\n    }\n  }\n\n  /**\n   * Delete item\n   */\n  async deleteItem(tab, itemId) {\n    try {\n      const allItems = appState.getTabData(tab);\n      await dataRepository.deleteInventoryItem(tab, itemId, allItems);\n      appState.removeItem(tab, itemId);\n      showSuccess('Item eliminado');\n      this.closeModal();\n    } catch (error) {\n      showError('Error al eliminar: ' + error.message);\n    }\n  }\n\n  /**\n   * Render current tab\n   */\n  renderCurrentTab() {\n    const state = appState.getState();\n    const tab = state.currentTab;\n    const content = document.getElementById('content');\n    \n    if (!content) return;\n\n    if (tab === 'dashboard') {\n      content.innerHTML = this.renderDashboard();\n    } else {\n      content.innerHTML = this.renderTabView();\n    }\n  }\n\n  /**\n   * Render dashboard\n   */\n  renderDashboard() {\n    const state = appState.getState();\n    let html = '<div class=\"dashboard\">';\n\n    // Summary cards\n    html += `\n      <div class=\"stats-row\">\n        <div class=\"stat-card\">\n          <div class=\"stat-label\">Total Items</div>\n          <div class=\"stat-value\">${state.data.despensa.length + state.data.aseo_hogar.length + state.data.aseo_personal.length}</div>\n        </div>\n        <div class=\"stat-card\">\n          <div class=\"stat-label\">Servicios</div>\n          <div class=\"stat-value\">${state.data.servicios.length}</div>\n        </div>\n        <div class=\"stat-card\">\n          <div class=\"stat-label\">Administración</div>\n          <div class=\"stat-value\">${state.data.admin.length}</div>\n        </div>\n        <div class=\"stat-card\">\n          <div class=\"stat-label\">Celulares</div>\n          <div class=\"stat-value\">${state.data.celular.length}</div>\n        </div>\n      </div>\n    `;\n\n    // Quick actions\n    html += `\n      <h3>Acciones rápidas</h3>\n      <div class=\"quick-actions\">\n        ${Object.entries(CATEGORIES).filter(([k, v]) => k !== 'dashboard').map(([key, meta]) => `\n          <button class=\"action-card\" onclick=\"app.switchTab('${key}')\">\n            <span class=\"icon\">${meta.icon}</span>\n            <span class=\"label\">${meta.label}</span>\n          </button>\n        `).join('')}\n      </div>\n    `;\n\n    html += '</div>';\n    return html;\n  }\n\n  /**\n   * Render tab view\n   */\n  renderTabView() {\n    const state = appState.getState();\n    const tab = state.currentTab;\n    const items = state.data[tab];\n    const meta = CATEGORIES[tab];\n    \n    if (!meta) return '<p>Tab no encontrado</p>';\n\n    let html = `\n      <div class=\"tab-view\">\n        <div class=\"search-bar-container\">\n          <input type=\"text\" class=\"search-bar\" placeholder=\"Buscar...\" value=\"${state.searchQuery}\">\n        </div>\n    `;\n\n    // Render items\n    if (items.length === 0) {\n      html += '<div class=\"empty\"><div class=\"empty-icon\">📭</div><p>No hay items</p></div>';\n    } else {\n      html += '<div class=\"items-list\">';\n      items.forEach(item => {\n        html += this.renderItemRow(tab, item, meta);\n      });\n      html += '</div>';\n    }\n\n    html += '</div>';\n    return html;\n  }\n\n  /**\n   * Render item row\n   */\n  renderItemRow(tab, item, meta) {\n    const icon = CATEGORY_ICONS[item.category] || '📦';\n    \n    return `\n      <div class=\"item-row\" onclick=\"app.openEditModal('${tab}', '${item.id}')\">\n        <span class=\"item-icon\">${icon}</span>\n        <div class=\"item-info\">\n          <div class=\"item-name\">${item.name}</div>\n          <div class=\"item-meta\">${item.category}${item.quantity ? ' • ' + item.quantity + ' ' + item.unit : ''}</div>\n        </div>\n      </div>\n    `;\n  }\n\n  /**\n   * Register event handlers\n   */\n  registerEventHandlers() {\n    // Tab switching\n    document.querySelectorAll('[data-tab]').forEach(btn => {\n      btn.addEventListener('click', () => {\n        const tab = btn.dataset.tab;\n        this.switchTab(tab);\n      });\n    });\n\n    // Search with debounce\n    const searchBar = document.querySelector('.search-bar');\n    if (searchBar) {\n      searchBar.addEventListener('input', (e) => {\n        this.searchDebounced(e.target.value);\n      });\n    }\n\n    // FAB button\n    const fab = document.getElementById('fab');\n    if (fab) {\n      fab.addEventListener('click', () => this.openAddModal());\n      fab.style.display = this.appState?.getState()?.currentTab !== 'dashboard' ? 'flex' : 'none';\n    }\n\n    // Auth buttons\n    document.querySelectorAll('[onclick*=\"signIn\"]').forEach(btn => {\n      btn.addEventListener('click', () => authManager.signIn());\n    });\n\n    document.querySelectorAll('[onclick*=\"signOut\"]').forEach(btn => {\n      btn.addEventListener('click', () => authManager.signOut());\n    });\n\n    // Sync button\n    document.querySelectorAll('[onclick*=\"syncAll\"]').forEach(btn => {\n      btn.addEventListener('click', () => this.syncData());\n    });\n  }\n}\n\n// Export singleton\nexport const app = new HogarApp();
+   * Close modal
+   */
+  closeModal() {
+    const overlay = document.getElementById('modal-overlay');
+    if (overlay) overlay.classList.remove('open');
+    this.currentEditingItem = null;
+  }
+
+  /**
+   * Render modal content
+   */
+  renderModal(mode, tab, item) {
+    const meta = CATEGORIES[tab];
+    if (!meta) return '';
+
+    const isEdit = mode === 'edit';
+    const title = isEdit ? 'Editar' : 'Agregar';
+
+    let html = `
+      <div class="modal-handle"></div>
+      <div class="modal-header">
+        <h2 class="modal-title">${title} ${meta.label}</h2>
+      </div>
+      <div class="modal-body">
+    `;
+
+    if (meta.type === 'inventory') {
+      html += this.renderInventoryForm(item, meta);
+    } else if (meta.type === 'admin') {
+      html += this.renderAdminForm(item, meta);
+    } else if (meta.type === 'celular') {
+      html += this.renderCelularForm(item, meta);
+    } else if (meta.type === 'servicios') {
+      html += this.renderServiceForm(item, meta);
+    }
+
+    html += `
+        <div class="modal-footer">
+          <button class="btn btn-secondary modal-cancel">Cancelar</button>
+          <button class="btn btn-primary modal-save">Guardar</button>
+        </div>
+      </div>
+    `;
+
+    if (isEdit) {
+      html += `<button class="btn btn-error modal-delete" data-id="${item.id}">Eliminar</button>`;
+    }
+
+    return html;
+  }
+
+  /**
+   * Render inventory form
+   */
+  renderInventoryForm(item, meta) {
+    const name = item?.name || '';
+    const category = item?.category || '';
+    const location = item?.location || '';
+    const quantity = item?.quantity || '';
+    const unit = item?.unit || 'unidades';
+    const available = item?.available !== false;
+
+    return `
+      <div class="form-group">
+        <label>Nombre *</label>
+        <input type="text" class="form-input" name="name" value="${name}" required>
+      </div>
+      <div class="form-group">
+        <label>Categoría *</label>
+        <select class="form-input" name="category" required>
+          <option value="">Seleccionar...</option>
+          ${meta.cats.map(c => `<option value="${c}" ${c === category ? 'selected' : ''}>${c}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Ubicación</label>
+        <select class="form-input" name="location">
+          <option value="">Seleccionar...</option>
+          ${meta.locs.map(l => `<option value="${l}" ${l === location ? 'selected' : ''}>${l}</option>`).join('')}
+        </select>
+      </div>
+      <div class="row2">
+        <div class="form-group">
+          <label>Cantidad *</label>
+          <input type="number" class="form-input" name="quantity" value="${quantity}" min="0" required>
+        </div>
+        <div class="form-group">
+          <label>Unidad *</label>
+          <select class="form-input" name="unit" required>
+            ${meta.units.map(u => `<option value="${u}" ${u === unit ? 'selected' : ''}>${u}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>
+          <input type="checkbox" name="available" ${available ? 'checked' : ''}>
+          Disponible
+        </label>
+      </div>
+    `;
+  }
+
+  /**
+   * Render admin form
+   */
+  renderAdminForm(item, meta) {
+    const name = item?.name || '';
+    const category = item?.category || '';
+    const amount = item?.amount || '';
+    const date = item?.date || '';
+    const status = item?.status || 'paid';
+
+    return `
+      <div class="form-group">
+        <label>Concepto *</label>
+        <input type="text" class="form-input" name="name" value="${name}" required>
+      </div>
+      <div class="form-group">
+        <label>Categoría *</label>
+        <select class="form-input" name="category" required>
+          <option value="">Seleccionar...</option>
+          ${meta.cats.map(c => `<option value="${c}" ${c === category ? 'selected' : ''}>${c}</option>`).join('')}
+        </select>
+      </div>
+      <div class="row2">
+        <div class="form-group">
+          <label>Valor *</label>
+          <input type="number" class="form-input" name="amount" value="${amount}" min="0" required>
+        </div>
+        <div class="form-group">
+          <label>Fecha</label>
+          <input type="date" class="form-input" name="date" value="${date}">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Estado</label>
+        <select class="form-input" name="status">
+          <option value="paid" ${status === 'paid' ? 'selected' : ''}>Pagado</option>
+          <option value="pending" ${status === 'pending' ? 'selected' : ''}>Pendiente</option>
+        </select>
+      </div>
+    `;
+  }
+
+  /**
+   * Render celular form
+   */
+  renderCelularForm(item, meta) {
+    const name = item?.name || '';
+    const category = item?.category || '';
+    const carrier = item?.carrier || '';
+    const amount = item?.amount || '';
+    const dataplan = item?.dataplan || '';
+    const dueDate = item?.dueDate || '';
+    const status = item?.status || 'active';
+
+    return `
+      <div class="form-group">
+        <label>Propietario *</label>
+        <input type="text" class="form-input" name="name" value="${name}" required>
+      </div>
+      <div class="form-group">
+        <label>Tipo *</label>
+        <select class="form-input" name="category" required>
+          ${meta.cats.map(c => `<option value="${c}" ${c === category ? 'selected' : ''}>${c}</option>`).join('')}
+        </select>
+      </div>
+      <div class="row2">
+        <div class="form-group">
+          <label>Valor</label>
+          <input type="number" class="form-input" name="amount" value="${amount}" min="0">
+        </div>
+        <div class="form-group">
+          <label>Plan de datos</label>
+          <input type="text" class="form-input" name="dataplan" value="${dataplan}" placeholder="ej: 10GB">
+        </div>
+      </div>
+      <div class="row2">
+        <div class="form-group">
+          <label>Operador</label>
+          <input type="text" class="form-input" name="carrier" value="${carrier}">
+        </div>
+        <div class="form-group">
+          <label>Fecha pago</label>
+          <input type="date" class="form-input" name="dueDate" value="${dueDate}">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Estado</label>
+        <select class="form-input" name="status">
+          <option value="active" ${status === 'active' ? 'selected' : ''}>Activo</option>
+          <option value="inactive" ${status === 'inactive' ? 'selected' : ''}>Inactivo</option>
+        </select>
+      </div>
+    `;
+  }
+
+  /**
+   * Render service form
+   */
+  renderServiceForm(item, meta) {
+    const name = item?.name || '';
+    const category = item?.category || '';
+    const unit = item?.unit || '';
+
+    return `
+      <div class="form-group">
+        <label>Servicio *</label>
+        <input type="text" class="form-input" name="name" value="${name}" required>
+      </div>
+      <div class="form-group">
+        <label>Tipo *</label>
+        <select class="form-input" name="category" required>
+          ${meta.cats.map(c => `<option value="${c}" ${c === category ? 'selected' : ''}>${c}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Unidad</label>
+        <input type="text" class="form-input" name="unit" value="${unit}" placeholder="ej: kWh, m3">
+      </div>
+    `;
+  }
+
+  /**
+   * Attach modal event listeners
+   */
+  attachModalListeners(tab) {
+    const cancelBtn = document.querySelector('.modal-cancel');
+    const saveBtn = document.querySelector('.modal-save');
+    const deleteBtn = document.querySelector('.modal-delete');
+
+    if (cancelBtn) cancelBtn.addEventListener('click', () => this.closeModal());
+    if (saveBtn) saveBtn.addEventListener('click', () => this.handleSaveItem(tab));
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', () => this.handleDeleteItem(tab, deleteBtn.dataset.id));
+    }
+  }
+
+  /**
+   * Handle save item
+   */
+  async handleSaveItem(tab) {
+    const formInputs = document.querySelectorAll('.form-input');
+    const item = {};
+
+    formInputs.forEach(input => {
+      if (input.type === 'checkbox') {
+        item[input.name] = input.checked;
+      } else {
+        item[input.name] = input.value;
+      }
+    });
+
+    if (this.currentEditingItem?.id) {
+      item.id = this.currentEditingItem.id;
+    }
+
+    try {
+      const saveBtn = document.querySelector('.modal-save');
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = '<span class="spinner"></span>';
+
+      const saved = await dataRepository.saveInventoryItem(tab, item);
+      
+      if (this.currentEditingItem?.id) {
+        appState.updateItem(tab, saved.id, saved);
+        showSuccess('Item actualizado');
+      } else {
+        appState.addItem(tab, saved);
+        showSuccess('Item agregado');
+      }
+
+      this.closeModal();
+    } catch (error) {
+      showError(error.message);
+    } finally {
+      const saveBtn = document.querySelector('.modal-save');
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = 'Guardar';
+      }
+    }
+  }
+
+  /**
+   * Handle delete item with confirmation
+   */
+  handleDeleteItem(tab, itemId) {
+    const item = appState.getTabData(tab).find(i => i.id === itemId);
+    if (!item) return;
+
+    const confirmed = confirm(`¿Eliminar "${item.name}"? Esta acción no se puede deshacer.`);
+    
+    if (confirmed) {
+      this.deleteItem(tab, itemId);
+    }
+  }
+
+  /**
+   * Delete item
+   */
+  async deleteItem(tab, itemId) {
+    try {
+      const allItems = appState.getTabData(tab);
+      await dataRepository.deleteInventoryItem(tab, itemId, allItems);
+      appState.removeItem(tab, itemId);
+      showSuccess('Item eliminado');
+      this.closeModal();
+    } catch (error) {
+      showError('Error al eliminar: ' + error.message);
+    }
+  }
+
+  /**
+   * Render current tab
+   */
+  renderCurrentTab() {
+    const state = appState.getState();
+    const tab = state.currentTab;
+    const content = document.getElementById('content');
+    
+    if (!content) return;
+
+    if (tab === 'dashboard') {
+      content.innerHTML = this.renderDashboard();
+    } else {
+      content.innerHTML = this.renderTabView();
+    }
+  }
+
+  /**
+   * Render dashboard
+   */
+  renderDashboard() {
+    const state = appState.getState();
+    let html = '<div class="dashboard">';
+
+    html += `
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">Total Items</div>
+          <div class="stat-value">${state.data.despensa.length + state.data.aseo_hogar.length + state.data.aseo_personal.length}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Servicios</div>
+          <div class="stat-value">${state.data.servicios.length}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Administración</div>
+          <div class="stat-value">${state.data.admin.length}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Celulares</div>
+          <div class="stat-value">${state.data.celular.length}</div>
+        </div>
+      </div>
+    `;
+
+    html += '</div>';
+    return html;
+  }
+
+  /**
+   * Render tab view
+   */
+  renderTabView() {
+    const state = appState.getState();
+    const tab = state.currentTab;
+    const items = state.data[tab];
+    const meta = CATEGORIES[tab];
+    
+    if (!meta) return '<p>Tab no encontrado</p>';
+
+    let html = `
+      <div class="tab-view">
+        <div class="search-bar-container">
+          <input type="text" class="search-bar" placeholder="Buscar..." value="${state.searchQuery}">
+        </div>
+    `;
+
+    if (items.length === 0) {
+      html += '<div class="empty"><div class="empty-icon">📭</div><p>No hay items</p></div>';
+    } else {
+      html += '<div class="items-list">';
+      items.forEach(item => {
+        html += this.renderItemRow(tab, item, meta);
+      });
+      html += '</div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  /**
+   * Render item row
+   */
+  renderItemRow(tab, item, meta) {
+    const icon = CATEGORY_ICONS[item.category] || '📦';
+    
+    return `
+      <div class="item-row" onclick="window.app.openEditModal('${tab}', '${item.id}')">
+        <span class="item-icon">${icon}</span>
+        <div class="item-info">
+          <div class="item-name">${item.name}</div>
+          <div class="item-meta">${item.category}${item.quantity ? ' • ' + item.quantity + ' ' + item.unit : ''}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Register event handlers
+   */
+  registerEventHandlers() {
+    document.querySelectorAll('[data-tab]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = btn.dataset.tab;
+        this.switchTab(tab);
+      });
+    });
+  }
+}
+
+export const app = new HogarApp();
