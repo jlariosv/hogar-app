@@ -11,10 +11,17 @@ export class TaskManager {
   }
 
   /**
-   * Load tasks from storage
+   * Load tasks from storage or Firebase
    */
   async loadTasks() {
     try {
+      // If Firebase is available, load from there with real-time listener
+      if (this.app.firebase && this.app.firebase.initialized) {
+        // Firebase loadTasksRealtime is already set up in auth
+        return;
+      }
+      
+      // Fallback: load from local storage
       const tasks = this.app.storage.getItem(CONSTANTS.STORAGE.TASKS) || [];
       this.app.state.tasks = Array.isArray(tasks) ? tasks : [];
       this.renderTasks();
@@ -27,61 +34,107 @@ export class TaskManager {
   /**
    * Add new task
    */
-  addTask(title, description = '', priority = CONSTANTS.TASKS.PRIORITY.MEDIUM) {
+  async addTask(title, description = '', priority = CONSTANTS.TASKS.PRIORITY.MEDIUM) {
     if (!title || title.trim().length === 0) {
       this.app.ui.showError('El título de la tarea es requerido');
       return false;
     }
     
     const task = {
-      id: 'task_' + Date.now(),
       title: title.trim(),
       description: description.trim(),
       status: CONSTANTS.TASKS.STATUS.PENDING,
       priority: priority,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      completedAt: null,
+      completed: false,
     };
     
-    this.app.state.tasks.push(task);
-    this.saveTasks();
-    this.renderTasks();
-    this.app.ui.showToast('Tarea creada', 'success');
-    return true;
+    try {
+      // Save to Firebase
+      if (this.app.firebase && this.app.firebase.initialized) {
+        await this.app.firebase.addTask(task);
+        // Real-time listener will update the UI
+      } else {
+        // Fallback to local storage
+        task.id = 'task_' + Date.now();
+        task.createdAt = Date.now();
+        task.updatedAt = Date.now();
+        this.app.state.tasks.push(task);
+        this.saveTasks();
+      }
+      
+      this.renderTasks();
+      this.app.ui.showToast('Tarea creada', 'success');
+      return true;
+    } catch (error) {
+      console.error('Error adding task:', error);
+      this.app.ui.showError('Error al crear la tarea');
+      return false;
+    }
   }
 
   /**
    * Delete task
    */
-  deleteTask(taskId) {
-    const index = this.app.state.tasks.findIndex(t => t.id === taskId);
-    if (index > -1) {
-      this.app.state.tasks.splice(index, 1);
-      this.saveTasks();
+  async deleteTask(taskId) {
+    try {
+      // Delete from Firebase
+      if (this.app.firebase && this.app.firebase.initialized) {
+        await this.app.firebase.deleteTask(taskId);
+        // Real-time listener will update the UI
+      } else {
+        // Fallback to local storage
+        const index = this.app.state.tasks.findIndex(t => t.id === taskId || t.firebaseId === taskId);
+        if (index > -1) {
+          this.app.state.tasks.splice(index, 1);
+          this.saveTasks();
+        }
+      }
+      
       this.renderTasks();
       this.app.ui.showToast('Tarea eliminada', 'success');
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      this.app.ui.showError('Error al eliminar la tarea');
     }
   }
 
   /**
    * Update task status
    */
-  updateTaskStatus(taskId, status) {
-    const task = this.app.state.tasks.find(t => t.id === taskId);
-    if (task) {
-      task.status = status;
-      task.updatedAt = Date.now();
-      if (status === CONSTANTS.TASKS.STATUS.COMPLETED) {
-        task.completedAt = Date.now();
+  async updateTaskStatus(taskId, status) {
+    try {
+      const task = this.app.state.tasks.find(t => t.id === taskId || t.firebaseId === taskId);
+      if (task) {
+        const updates = {
+          status: status,
+          completed: status === CONSTANTS.TASKS.STATUS.COMPLETED,
+        };
+        
+        // Update in Firebase
+        if (this.app.firebase && this.app.firebase.initialized) {
+          const firebaseId = task.firebaseId || taskId;
+          await this.app.firebase.updateTask(firebaseId, updates);
+          // Real-time listener will update the UI
+        } else {
+          // Fallback to local storage
+          task.status = status;
+          task.updatedAt = Date.now();
+          if (status === CONSTANTS.TASKS.STATUS.COMPLETED) {
+            task.completedAt = Date.now();
+          }
+          this.saveTasks();
+        }
+        
+        this.renderTasks();
       }
-      this.saveTasks();
-      this.renderTasks();
+    } catch (error) {
+      console.error('Error updating task status:', error);
+      this.app.ui.showError('Error al actualizar la tarea');
     }
   }
 
   /**
-   * Save tasks to storage
+   * Save tasks to local storage (fallback)
    */
   saveTasks() {
     try {
@@ -121,6 +174,7 @@ export class TaskManager {
       `;
       
       statusTasks.forEach(task => {
+        const taskId = task.firebaseId || task.id;
         const priorityClass = `priority-${task.priority}`;
         const priorityEmoji = this.getPriorityEmoji(task.priority);
         html += `
@@ -131,8 +185,8 @@ export class TaskManager {
             </div>
             ${task.description ? `<div class="task-desc">${this.escapeHtml(task.description)}</div>` : ''}
             <div class="task-actions">
-              ${status !== 'completed' ? `<button class="task-btn" onclick="window.app.tasks.updateTaskStatus('${task.id}', 'completed')">✓ Completar</button>` : ''}
-              <button class="task-btn danger" onclick="window.app.tasks.deleteTask('${task.id}')">🗑️ Eliminar</button>
+              ${status !== 'completed' ? `<button class="task-btn" onclick="window.app.tasks.updateTaskStatus('${taskId}', 'completed')">✓ Completar</button>` : ''}
+              <button class="task-btn danger" onclick="window.app.tasks.deleteTask('${taskId}')">🗑️ Eliminar</button>
             </div>
           </div>
         `;
@@ -195,14 +249,6 @@ export class TaskManager {
     const priority = document.getElementById('task-priority')?.value || CONSTANTS.TASKS.PRIORITY.MEDIUM;
     
     this.addTask(title, description, priority);
-  }
-
-  /**
-   * Sync tasks (for future cloud sync implementation)
-   */
-  async syncTasks() {
-    // TODO: Implement cloud sync
-    console.log('Syncing tasks...');
   }
 
   /**

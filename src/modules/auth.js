@@ -38,7 +38,7 @@ export class AuthManager {
       if (loadingDiv) loadingDiv.classList.add('show');
       if (authBtn) authBtn.disabled = true;
       
-      // Verify code (simulate async operation)
+      // Verify code
       await this.verifyCode(code);
       
       // Success
@@ -53,6 +53,14 @@ export class AuthManager {
         user: this.app.state.user,
         timestamp: Date.now(),
       });
+      
+      // Initialize Firebase real-time listener
+      if (this.app.firebase) {
+        await this.app.firebase.loadTasksRealtime((tasks) => {
+          this.app.state.tasks = tasks;
+          this.app.tasks.renderTasks();
+        });
+      }
       
       // Show app
       this.app.ui.showApp();
@@ -89,6 +97,11 @@ export class AuthManager {
    */
   handleLogout() {
     if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
+      // Unsubscribe from Firebase updates
+      if (this.app.firebase) {
+        this.app.firebase.unsubscribeFromUpdates();
+      }
+      
       // Clear state
       this.app.state.user = null;
       this.app.state.tasks = [];

@@ -8,6 +8,7 @@ import { StorageManager } from './utils/storage.js';
 import { AuthManager } from './modules/auth.js';
 import { UIManager } from './modules/ui.js';
 import { TaskManager } from './modules/tasks.js';
+import { FirebaseManager } from './modules/firebase.js';
 
 export class App {
   constructor() {
@@ -16,6 +17,7 @@ export class App {
     this.auth = new AuthManager(this);
     this.ui = new UIManager(this);
     this.tasks = new TaskManager(this);
+    this.firebase = new FirebaseManager(this);
   }
 
   /**
@@ -25,12 +27,25 @@ export class App {
     try {
       console.log('🚀 Inicializando aplicación...');
       
+      // Initialize Firebase
+      await this.firebase.init();
+      
       // Restore session
       const session = this.storage.getItem(CONFIG.SESSION_KEY);
       if (session && !this.isSessionExpired(session)) {
         this.state.user = session.user;
         this.ui.showApp();
-        await this.tasks.loadTasks();
+        
+        // Set up real-time listener for tasks
+        if (this.firebase.initialized) {
+          await this.firebase.loadTasksRealtime((tasks) => {
+            this.state.tasks = tasks;
+            this.tasks.renderTasks();
+          });
+        } else {
+          await this.tasks.loadTasks();
+        }
+        
         console.log('✅ Sesión restaurada');
       } else {
         this.ui.showAuth();
@@ -145,8 +160,8 @@ export class App {
     console.log('🌐 Conexión en línea');
     this.ui.showToast('En línea', 'success');
     // Sync tasks if needed
-    if (this.tasks && typeof this.tasks.syncTasks === 'function') {
-      this.tasks.syncTasks().catch(err => console.error('Sync error:', err));
+    if (this.tasks && typeof this.tasks.loadTasks === 'function') {
+      this.tasks.loadTasks().catch(err => console.error('Sync error:', err));
     }
   }
 
